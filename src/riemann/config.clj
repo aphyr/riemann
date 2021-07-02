@@ -231,22 +231,37 @@
            (reduce conj (:streams @next-core) things))))
 
 (defn index
-  "Set the index used by this core. Returns the index."
+  "Create a new index and add it to the current core and next core as needed.
+
+  If the current core has no index, add the new index to it.
+
+  To the next core, add the current core's index (when equivalent) or add the
+  new index (when not equivalent).
+
+  In practice, because Riemann currently has only one index type (NBHM), only a
+  single index will ever be created. It will be preserved across all future
+  calls to `index`.
+
+  Returns the index."
   [& opts]
   (locking core
-    (let [index (:index @core)
+    (let [current-index (:index @core)
+          ; Create a new index. Later we'll decide whether it needs to be added
+          ; to the current core, next core, or both.
           ; Note that we need to wrap the *current* core's pubsub; the next
           ; core's pubsub module will be discarded in favor of the current one
           ; when core transition takes place.
-          index' (-> (apply riemann.index/index opts)
-                     (core/wrap-index (:pubsub @core)))
-          ; If the new index is equivalent to the old one, preserve the old
-          ; one.
-          index' (if (service/equiv? index index')
-                   index
-                   index')]
-      (swap! next-core assoc :index index')
-      index')))
+          new-index (-> (apply riemann.index/index opts)
+                        (core/wrap-index (:pubsub @core)))
+          ; If the new index is equivalent to the old one, preserve the old one.
+          chosen-index (if (service/equiv? current-index new-index)
+                         current-index
+                         new-index)]
+      ; If the current core has no index, add the newly created one.
+      (when (nil? current-index) (swap! core assoc :index chosen-index))
+      ; Always add the chosen index to the next core, ready for core transition.
+      (swap! next-core assoc :index chosen-index)
+      chosen-index)))
 
 (defn update-index
   "Updates the given index with all events received. Also publishes to the

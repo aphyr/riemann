@@ -130,10 +130,12 @@
 (deftest index-test
   (let [i (index)]
     (testing "index creation helper creates the index properly"
-      (is (satisfies? Index i))
-      (is (= i (:index @next-core)))
-      (is (nil? (:index @core))))
-    (testing "index is applied to the core properly during initial load"
+      (is (satisfies? Index i)))
+    (testing "index creation helper sets the index of the current core"
+      (is (= i (:index @core))))
+    (testing "index creation helper sets the index of the next core"
+      (is (= i (:index @next-core))))
+    (testing "current core index is preserved after apply"
       (apply!)
       (is (identical? i (:index @core))))
     (testing "we have the proper reference to the index after a reload"
